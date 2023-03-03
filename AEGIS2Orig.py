@@ -22,6 +22,7 @@ from bokeh.layouts import row, column
 
 # Color Map Import
 from bokeh.models import LinearColorMapper, ColorBar
+from bokeh.transform import transform
 
 # External Imports
 nodeData, branchData= importData_HH('R2_1247_3_t11_mod_branch_data_1.txt', 'R2_1247_3_t11_mod_node_data_1.txt')
@@ -39,6 +40,9 @@ def main():
 
     # Create dict for node characteristics
     node_color_dict = {}
+
+    # Creates palette of colorbar
+    color_mapper = LinearColorMapper(palette = "Turbo256", low = 0, high = 10000)
 
     #Initializes node color
     for n in nodeData.values():
@@ -372,9 +376,6 @@ def main():
     branch_text_input.on_change("value", bCallback) #activates when text is entered
 
     div = Div(text = '') #Creates initial empty widget for text block of deactivated items
-
-    # Creates palette of colorbar
-    color_mapper = LinearColorMapper(palette = "Viridis256", low = 0, high = 10000)
 
     # Creates color bar values 
     color_bar = ColorBar(color_mapper = color_mapper,
