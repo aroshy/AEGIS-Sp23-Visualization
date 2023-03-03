@@ -20,6 +20,9 @@ from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, Autocompl
 from importData_HH import importData_HH
 from bokeh.layouts import row, column
 
+# Color Map Import
+from bokeh.models import LinearColorMapper, ColorBar
+
 # External Imports
 nodeData, branchData= importData_HH('R2_1247_3_t11_mod_branch_data_1.txt', 'R2_1247_3_t11_mod_node_data_1.txt')
 
@@ -97,7 +100,7 @@ def main():
     networkx.set_edge_attributes(g, lengthDict, 'length')
     networkx.set_edge_attributes(g, bColor, 'branch_color')
     edge_cmap= 'branch_color'
-
+    
     #Creates figure object with some desired widgets
     plot = figure(
                   tools="pan,wheel_zoom,save,reset", active_scroll='wheel_zoom',
@@ -370,8 +373,19 @@ def main():
 
     div = Div(text = '') #Creates initial empty widget for text block of deactivated items
 
+    # Creates palette of colorbar
+    color_mapper = LinearColorMapper(palette = "Viridis256", low = 0, high = 10000)
+
+    # Creates color bar values 
+    color_bar = ColorBar(color_mapper = color_mapper,
+                     label_standoff = 12,
+                     location = (0,0),
+                     title = 'Voltage')
+
     r = row(children= [plot, column(children= [row(children=[checkbox_group, checkbox_v]), text_input, branch_text_input, div])]) #formatting
 
-    curdoc().add_root(r) #adds plot to server
+    curdoc().add_root(r) #adds plot to 
+    
+    plot.add_layout(color_bar, 'below')
 
 main()
