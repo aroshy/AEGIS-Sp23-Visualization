@@ -20,6 +20,7 @@ from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, Autocompl
 from importData_HH import importData_HH
 from bokeh.layouts import row, column
 
+
 # Color Map Import
 from bokeh.models import LinearColorMapper, ColorBar
 from bokeh.transform import transform
@@ -42,16 +43,42 @@ def main():
     node_color_dict = {}
 
     # Creates palette of colorbar
-    color_mapper = LinearColorMapper(palette = "Turbo256", low = 0, high = 10000)
+    color_mapper = LinearColorMapper(palette = "Turbo256", low = 220, high = 250)
 
     #Initializes node color
     for n in nodeData.values():
         if n.index == 1:
             node_color_dict[n.label] = 'yellow'
-        elif n.baseV == 7200:
+        elif n.baseV >= 250:
+            node_color_dict[n.label] = 'maroon'
+        elif 248 <= n.baseV < 250:
             node_color_dict[n.label] = 'red'
-        else:
-            node_color_dict[n.label] = 'skyblue'
+        elif 243 <= n.baseV < 246:
+            node_color_dict[n.label] = 'redorange'
+        elif 239 <= n.baseV < 240:
+            node_color_dict[n.label] = 'orange'
+        elif 238 <= n.baseV < 239:
+            node_color_dict[n.label] = 'gold'
+        elif 237 <= n.baseV < 238:
+            node_color_dict[n.label] = 'yellow'
+        elif 234 <= n.baseV < 237:
+            node_color_dict[n.label] = 'greenyellow'
+        elif 232 <= n.baseV < 234:
+            node_color_dict[n.label] = 'chartreuse'
+        elif 231 <= n.baseV < 232:
+            node_color_dict[n.label] = 'lime'
+        elif 229 <= n.baseV < 231:
+            node_color_dict[n.label] = 'turqoise'
+        elif 228 <= n.baseV < 229:
+            node_color_dict[n.label] = 'deepskyblue'
+        elif 223 <= n.baseV < 228:
+            node_color_dict[n.label] = 'dodgerblue'
+        elif 221 <= n.baseV < 223:
+            node_color_dict[n.label] = 'royalblue'
+        elif 220 <= n.baseV < 221:
+            node_color_dict[n.label] = 'darkblue'
+        elif n.baseV < 220:
+            node_color_dict[n.label] = 'black'
 
     bColor= {}
     for branch in branchData.values():
