@@ -4,6 +4,9 @@
 import networkx
 
 # Internal Imports
+from deleteData import *
+from Data_to_Node import *
+import plotly.graph_objects as go
 from constants import *
 from classes import *
 from deletionAlg import deletionAlg
@@ -11,22 +14,39 @@ from AEGIS_select import selectPhase, selectVolt
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib import colors as mcolors
 import numpy as np
 from bokeh.models import Range1d, Circle, ColumnDataSource, MultiLine, \
-    NodesAndLinkedEdges, LabelSet, HoverTool, Div
-from bokeh.plotting import figure, curdoc
-from bokeh.plotting import from_networkx
+    NodesAndLinkedEdges, LabelSet, HoverTool, Div, Button, TapTool, LinearColorMapper, ColorBar
+from bokeh.plotting import figure, curdoc, show
+from bokeh.plotting import from_networkx, gridplot
 from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, AutocompleteInput
 from importData_HH import importData_HH
 from bokeh.layouts import row, column
-
-
-# Color Map Import
-from bokeh.models import LinearColorMapper, ColorBar
+from bokeh.events import Tap
+from ImportCSV import *
+from nodeNormalize import *
 from bokeh.transform import transform
 
 # External Imports
-nodeData, branchData= importData_HH('R2_1247_3_t11_mod_branch_data_1.txt', 'R2_1247_3_t11_mod_node_data_1.txt')
+nodeData, branchData= importData_HH('R2_1247_3_t11_mod_branch_data.txt', 'R2_1247_3_t11_mod_node_data.txt')
+insts, longNames = csvRead()
+for i in range(len(longNames)):
+    newDict = {}
+longNames = longNames[1:]
+shName = []
+dataDict = {}
+for i in range(len(longNames)):
+    shName.append(data_to_node(nodeData, longNames[i]))
+for name in set(shName):
+    dataDict[name] = []
+for i in range(len(longNames)):
+    dataDict[shName[i]].append(insts[i])
+for key in dataDict.keys():
+    for i in range(len(dataDict[key])):
+        for j in range(len(dataDict[key][i])):
+            dataDict[key][i][j] = nodeNormalize(nodeData, key, dataDict[key][i][j])  
+
 
 # Main Function
 def main():
@@ -42,43 +62,16 @@ def main():
     # Create dict for node characteristics
     node_color_dict = {}
 
-    # Creates palette of colorbar
-    color_mapper = LinearColorMapper(palette = "Turbo256", low = 220, high = 250)
+    color_mapper = LinearColorMapper(palette = "Turbo256", low = 0.95, high = 1.05, nan_color= 'grey')
 
     #Initializes node color
     for n in nodeData.values():
         if n.index == 1:
             node_color_dict[n.label] = 'yellow'
-        elif n.baseV >= 250:
-            node_color_dict[n.label] = 'maroon'
-        elif 248 <= n.baseV < 250:
+        elif n.baseV == 7200:
             node_color_dict[n.label] = 'red'
-        elif 243 <= n.baseV < 246:
-            node_color_dict[n.label] = 'redorange'
-        elif 239 <= n.baseV < 240:
-            node_color_dict[n.label] = 'orange'
-        elif 238 <= n.baseV < 239:
-            node_color_dict[n.label] = 'gold'
-        elif 237 <= n.baseV < 238:
-            node_color_dict[n.label] = 'yellow'
-        elif 234 <= n.baseV < 237:
-            node_color_dict[n.label] = 'greenyellow'
-        elif 232 <= n.baseV < 234:
-            node_color_dict[n.label] = 'chartreuse'
-        elif 231 <= n.baseV < 232:
-            node_color_dict[n.label] = 'lime'
-        elif 229 <= n.baseV < 231:
-            node_color_dict[n.label] = 'turqoise'
-        elif 228 <= n.baseV < 229:
-            node_color_dict[n.label] = 'deepskyblue'
-        elif 223 <= n.baseV < 228:
-            node_color_dict[n.label] = 'dodgerblue'
-        elif 221 <= n.baseV < 223:
-            node_color_dict[n.label] = 'royalblue'
-        elif 220 <= n.baseV < 221:
-            node_color_dict[n.label] = 'darkblue'
-        elif n.baseV < 220:
-            node_color_dict[n.label] = 'black'
+        else:
+            node_color_dict[n.label] = 'skyblue'
 
     bColor= {}
     for branch in branchData.values():
@@ -98,12 +91,20 @@ def main():
         else:
             fromNodeDict[node.label] = 'N/A'
 
+    valueDictionary = {}
+    for node in nodeData.values():
+        if node.label in dataDict.keys():
+            valueDictionary[node.label] = dataDict[node.label][0][0]
+        else:
+            valueDictionary[node.label] = 'N/A'
+
     #Sets attributes which will be displayed by hover function
     networkx.set_node_attributes(g, dict(zip([n.label for n in nodeData.values()], [n.baseV for n in nodeData.values()])), 'node_base_v')
     networkx.set_node_attributes(g, dict(zip([n.label for n in nodeData.values()], [n.phases for n in nodeData.values()])), 'node_phase')
     networkx.set_node_attributes(g, node_color_dict, 'node_color')
     networkx.set_node_attributes(g, fromNodeDict, 'fromNode')
     networkx.set_node_attributes(g, outline_dict, 'border_color')
+    networkx.set_node_attributes(g, valueDictionary, 'sim_vals')
     node_outline= 'border_color'
     color_attribute = 'node_color'
     lineType = {}
@@ -131,7 +132,7 @@ def main():
     networkx.set_edge_attributes(g, lengthDict, 'length')
     networkx.set_edge_attributes(g, bColor, 'branch_color')
     edge_cmap= 'branch_color'
-    
+
     #Creates figure object with some desired widgets
     plot = figure(
                   tools="pan,wheel_zoom,save,reset", active_scroll='wheel_zoom',
@@ -146,9 +147,11 @@ def main():
     source = ColumnDataSource({'x': x, 'y': y, 'name': [node_labels[i] for i in range(len(x))]})
     #labels = LabelSet(x='x', y='y', text='name', source=source, background_fill_color='white', text_font_size='10px',
     #                  background_fill_alpha=.7)'''
+    #print(network_graph.node_renderer.data_source.data)
+    x, y = zip(*network_graph.layout_provider.graph_layout.values())
 
-
-    network_graph.node_renderer.glyph = Circle(size=15, fill_color=color_attribute, line_color= node_outline)
+    network_graph.node_renderer.glyph = Circle(size=15, fill_color={'field' : 'sim_vals', 'transform' : color_mapper}, line_color= node_outline)
+    #print(network_graph.layout_provider.graph_layout.values())
 
     # Set edge opacity and width
     network_graph.edge_renderer.glyph = MultiLine(line_alpha=0.5, line_width=1, line_color= edge_cmap)
@@ -156,9 +159,12 @@ def main():
 
     # Hover function for node portion of inital data
     hover_nodes = HoverTool(
-                    tooltips= [("Node", "@index"), ("Base Voltage(V)", "@node_base_v"), ("Phase", "@node_phase"), ("From Node", "@fromNode")],
+                    tooltips= [("Node", "@index"), ("Base Voltage(V)", "@node_base_v"), ("Phase", "@node_phase"), ("From Node", "@fromNode"), ("Simulated Voltage", "@sim_vals")],
                     renderers= [network_graph.node_renderer]
                     )
+    
+    tapEvent = TapTool()
+
 
     # Hover function for branch portion of initial data
     hover_edges = HoverTool(
@@ -167,7 +173,11 @@ def main():
                     line_policy= 'interp'
 				    )
 
-    plot.add_tools(hover_edges, hover_nodes)
+    def call(event):
+        print(event.data)
+
+    plot.add_tools(hover_edges, hover_nodes, tapEvent)#, TapTool(renderers=[network_graph.node_renderer, network_graph.edge_renderer]))
+    plot.on_event(Tap, call)
 
     # Set edge highlight colors
     network_graph.edge_renderer.selection_glyph = MultiLine(line_color=node_highlight_color, line_width=2)
@@ -179,6 +189,15 @@ def main():
     plot.renderers.append(network_graph)
 #plot.renderers.append(labels)
 
+    '''color = LinearColorMapper(palette = 'Viridis256',
+                          low = -100,
+                          high = 40)'''
+
+    color_bar = ColorBar(color_mapper = color_mapper,
+                     label_standoff = 14,
+                     location = (0,0),
+                     title = 'Plot')
+    plot.add_layout(color_bar, 'right')
 
     #Checkboxes
     def checkCallback(attr, old, new):
@@ -205,6 +224,22 @@ def main():
             for i in altBranches:
                 branchData[i].value[0] = True
             restore(altNodes, altBranches)
+
+    def nodeUpdate(index):
+        for i in dataDict.keys():
+            valueDictionary[i] = dataDict[i][0][index]
+        networkx.set_node_attributes(g, valueDictionary, 'sim_vals')
+        #print(nodeVoltRange)
+        network_graph.node_renderer.glyph = Circle(size=15, fill_color='black', line_color= node_outline)  
+        #update()
+                
+    def aPhaseCall():
+        nodeUpdate(1)
+        
+    def bPhaseCall():
+        restore([n.label for n in nodeData.values()], [])
+    def cPhaseCall():
+        print('C')
 
     def checkVCallback(attr, old, new):   
         if len(old) > len(new): #true if value has been deselected
@@ -293,6 +328,9 @@ def main():
                 for b in gBranch:
                     branchData[b].value[1] = False
                     
+                deleteData('R2_1247_3_t11_mod_node_data_1.txt', 'node_Output.txt', [n.label for n in nodeData.values() if n.value[2] == False])
+                deleteData('R2_1247_3_t11_mod_branch_data_1.txt', 'branch_Output.txt', [b.label for b in branchData.values() if b.value[1] == False])
+
                 gOut(gNode, gBranch) #grey-out function
 
                 if textVal == 'Inactive Components: ': #sees if node is the first node in list
@@ -350,6 +388,9 @@ def main():
                 for b in gBranch:
                     branchData[b].value[1] = False
                     
+                deleteData('R2_1247_3_t11_mod_node_data_1.txt', 'node_Output.txt', [n.label for n in nodeData.values() if n.value[2] == False])
+                deleteData('R2_1247_3_t11_mod_branch_data_1.txt', 'branch_Output.txt', [b.label for b in branchData.values() if b.value[1] == False])
+
                 gOut(gNode, gBranch)
             text_input.update(value='') #Empties text box
             div.update(text=textVal) #Updates text block of deactivated parts
@@ -367,19 +408,21 @@ def main():
         update()
 
     def restore(nodes, edges):
+        #print('check 1')
         #Function which changes certain attibutes if parts no longer need to be gray
         for i in nodes:
-            if(nodeData[i].value[0] and nodeData[i].value[1] and nodeData[i].value[2]): #Checks if node has been deactivated by another source
-                if node_color_dict[i] == 'lightgrey': #Makes sure that the node needs to be changed
-
-                    #Checks for node color based on color
-                    if nodeData[i].index == 1:
-                        node_color_dict[i] = 'yellow'
-                    elif nodeData[i].baseV == 7200:
-                        node_color_dict[i] = 'red'
-                    else:
-                        node_color_dict[i] = 'skyblue'
-                    outline_dict[i] = 'black' 
+            #print(i)
+            #print(node_color_dict[i])
+            if(node_color_dict[i] != 'skyblue' and node_color_dict[i] != 'red' and node_color_dict[i] != 'yellow'): #Checks if node has been deactivated by another source
+                #print(i)
+                #Checks for node color based on color
+                if nodeData[i].index == 1:
+                    node_color_dict[i] = 'yellow'
+                elif nodeData[i].baseV == 7200:
+                    node_color_dict[i] = 'red'
+                else:
+                    node_color_dict[i] = 'skyblue'
+                outline_dict[i] = 'black' 
 
 
         #Updates branch color in dictionary
@@ -393,27 +436,28 @@ def main():
         network_graph.node_renderer.data_source.data['border_color']=(list(outline_dict.values()))
         network_graph.edge_renderer.data_source.data['branch_color']=(list(bColor.values()))
     
+        
+        #print(network_graph.node_renderer.data_source.data)
+
         plot.update(renderers = [network_graph])
 
-           
+    #print(network_graph.node_renderer.data_source)     
     text_input = AutocompleteInput(title="Enter Node to be Put In or Out of Service:", completions= [n for n in nodeData.keys()], value="") #Autocomplete text box
     text_input.on_change("value", callback) #activates when text is entered
     
     branch_text_input = AutocompleteInput(title= "Enter Branch to be Put In or Out of Service:", completions= [b for b in branchData.keys()], value='')
     branch_text_input.on_change("value", bCallback) #activates when text is entered
 
+    buttonA = Button(label='A Phase')
+    buttonA.on_click(aPhaseCall)
+    buttonB = Button(label='B Phase')
+    buttonB.on_click(bPhaseCall)
+    buttonC = Button(label='C Phase')
+    buttonC.on_click(cPhaseCall)
+
     div = Div(text = '') #Creates initial empty widget for text block of deactivated items
 
-    # Creates color bar values 
-    color_bar = ColorBar(color_mapper = color_mapper,
-                     label_standoff = 12,
-                     location = (0,0),
-                     title = 'Voltage')
-
-    r = row(children= [plot, column(children= [row(children=[checkbox_group, checkbox_v]), text_input, branch_text_input, div])]) #formatting
-
-    curdoc().add_root(r) #adds plot to 
-    
-    plot.add_layout(color_bar, 'below')
+    r = row(children= [plot, column(children= [row(children=[checkbox_group, checkbox_v]), text_input, branch_text_input, div, row(children = [buttonA, buttonB, buttonC])])]) #formatting
+    curdoc().add_root(r) #adds plot to server
 
 main()
