@@ -20,17 +20,22 @@ from bokeh.models import Range1d, Circle, ColumnDataSource, MultiLine, \
     NodesAndLinkedEdges, LabelSet, HoverTool, Div, Button, TapTool, LinearColorMapper, ColorBar
 from bokeh.plotting import figure, curdoc, show
 from bokeh.plotting import from_networkx, gridplot
-from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, AutocompleteInput
+from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, AutocompleteInput, Slider
 from importData_HH import importData_HH
 from bokeh.layouts import row, column
 from bokeh.events import Tap
 from ImportCSV import *
 from nodeNormalize import *
 from bokeh.transform import transform
+import time
 
 # External Imports
 nodeData, branchData= importData_HH('R2_1247_3_t11_mod_branch_data.txt', 'R2_1247_3_t11_mod_node_data.txt')
-insts, longNames = csvRead()
+times, insts, longNames = csvRead()
+
+for i in range(len(insts)):
+    insts[i][1] = 240*(0.95 + 0.1 * i/len(insts))
+
 for i in range(len(longNames)):
     newDict = {}
 longNames = longNames[1:]
@@ -47,7 +52,6 @@ for key in dataDict.keys():
         for j in range(len(dataDict[key][i])):
             dataDict[key][i][j] = nodeNormalize(nodeData, key, dataDict[key][i][j])  
 
-
 # Main Function
 def main():
     print("AEGIS")
@@ -62,7 +66,7 @@ def main():
     # Create dict for node characteristics
     node_color_dict = {}
 
-    color_mapper = LinearColorMapper(palette = "Turbo256", low = 0.95, high = 1.05, nan_color= 'grey')
+    color_mapper = LinearColorMapper(palette = "Turbo256", low = 0.95, high = 1.05, nan_color= 'lightgrey')
 
     #Initializes node color
     for n in nodeData.values():
@@ -163,7 +167,7 @@ def main():
                     renderers= [network_graph.node_renderer]
                     )
     
-    tapEvent = TapTool()
+    #tapEvent = TapTool()
 
 
     # Hover function for branch portion of initial data
@@ -176,8 +180,8 @@ def main():
     def call(event):
         print(event.data)
 
-    plot.add_tools(hover_edges, hover_nodes, tapEvent)#, TapTool(renderers=[network_graph.node_renderer, network_graph.edge_renderer]))
-    plot.on_event(Tap, call)
+    plot.add_tools(hover_edges, hover_nodes)#, tapEvent)#, TapTool(renderers=[network_graph.node_renderer, network_graph.edge_renderer]))
+    #plot.on_event(Tap, call)
 
     # Set edge highlight colors
     network_graph.edge_renderer.selection_glyph = MultiLine(line_color=node_highlight_color, line_width=2)
@@ -226,11 +230,12 @@ def main():
             restore(altNodes, altBranches)
 
     def nodeUpdate(index):
+        #print(network_graph.node_renderer.data_source.data)
         for i in dataDict.keys():
             valueDictionary[i] = dataDict[i][0][index]
-        networkx.set_node_attributes(g, valueDictionary, 'sim_vals')
+        network_graph.node_renderer.data_source.data['sim_vals'] = list(valueDictionary.values())
         #print(nodeVoltRange)
-        network_graph.node_renderer.glyph = Circle(size=15, fill_color='black', line_color= node_outline)  
+        network_graph.node_renderer.glyph.fill_color = {'field' : 'sim_vals', 'transform' : color_mapper}
         #update()
                 
     def aPhaseCall():
@@ -448,16 +453,27 @@ def main():
     branch_text_input = AutocompleteInput(title= "Enter Branch to be Put In or Out of Service:", completions= [b for b in branchData.keys()], value='')
     branch_text_input.on_change("value", bCallback) #activates when text is entered
 
-    buttonA = Button(label='A Phase')
-    buttonA.on_click(aPhaseCall)
-    buttonB = Button(label='B Phase')
-    buttonB.on_click(bPhaseCall)
-    buttonC = Button(label='C Phase')
-    buttonC.on_click(cPhaseCall)
+    def movieCall():
+        for i in range(len(insts[0])):
+            slider.value= i + 1
+            #print(slider.value)
+            #nodeUpdate(i)
+            #time.sleep(1)
+
+
+    button = Button(label='Movie Thing')
+    button.on_click(movieCall)
+
+    def slideCall(attr, old, new):
+        nodeUpdate(new -1)
+
+
+    slider = Slider(start= 1, end = len(insts[0]), value = 1, title = times[0])
+    slider.on_change('value', slideCall)
 
     div = Div(text = '') #Creates initial empty widget for text block of deactivated items
 
-    r = row(children= [plot, column(children= [row(children=[checkbox_group, checkbox_v]), text_input, branch_text_input, div, row(children = [buttonA, buttonB, buttonC])])]) #formatting
+    r = row(children= [plot, column(children= [row(children=[checkbox_group, checkbox_v]), text_input, branch_text_input, div, row(children = [button]), slider])]) #formatting
     curdoc().add_root(r) #adds plot to server
 
 main()
