@@ -31,22 +31,23 @@ import time
 
 # External Imports
 nodeData, branchData= importData_HH('R2_1247_3_t11_mod_branch_data.txt', 'R2_1247_3_t11_mod_node_data.txt')
-times, insts, longNames = csvRead()
-
+longNames, insts = csvRead('R2_1247_3_t11_ResidentialVoltages.csv')
+longNames = longNames[1:]
+times = []
 for i in range(len(insts)):
-    insts[i][1] = 240*(0.95 + 0.1 * i/len(insts))
+    times.append(insts[i][0])
+    insts[i] = insts[i][1:]
 
 for i in range(len(longNames)):
     newDict = {}
-longNames = longNames[1:]
 shName = []
 dataDict = {}
-for i in range(len(longNames)):
-    shName.append(data_to_node(nodeData, longNames[i]))
+for i in longNames:
+    shName.append(data_to_node(nodeData, i))
 for name in set(shName):
     dataDict[name] = []
 for i in range(len(longNames)):
-    dataDict[shName[i]].append(insts[i])
+    dataDict[shName[i]].append([data[i] for data in insts])
 for key in dataDict.keys():
     for i in range(len(dataDict[key])):
         for j in range(len(dataDict[key][i])):
@@ -454,21 +455,24 @@ def main():
     branch_text_input.on_change("value", bCallback) #activates when text is entered
 
     def movieCall():
-        for i in range(len(insts[0])):
-            slider.value= i + 1
-            #print(slider.value)
-            #nodeUpdate(i)
-            #time.sleep(1)
-
-
+        for i in range(len(times)):
+            start = time.time()
+            #print(start)
+            slider.update(value= i + 1)
+            end = time.time()
+            #print(end)
+            '''while ((end - start) < 0.2):
+                end = time.time()'''
+            
     button = Button(label='Movie Thing')
     button.on_click(movieCall)
 
     def slideCall(attr, old, new):
+        slider.update(title = times[new -1])
         nodeUpdate(new -1)
 
 
-    slider = Slider(start= 1, end = len(insts[0]), value = 1, title = times[0])
+    slider = Slider(start= 1, end = len(times), value = 1, title = times[0])
     slider.on_change('value', slideCall)
 
     div = Div(text = '') #Creates initial empty widget for text block of deactivated items
