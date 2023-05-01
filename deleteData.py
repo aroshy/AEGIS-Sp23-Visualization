@@ -1,3 +1,6 @@
+# AEGIS - Distribution System Visualization Software
+# Makes new .txt file based on deleted nodes
+
 from classes import *
 
 def deleteData(filename, nFile, delNameList):

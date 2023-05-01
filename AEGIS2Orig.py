@@ -1,65 +1,169 @@
 # AEGIS - Distribution System Visualization Software
 # Visual tool for visualizing data
 # 9/25/22
-import networkx
 
 # Internal Imports
 from deleteData import *
 from Data_to_Node import *
-import plotly.graph_objects as go
 from constants import *
 from classes import *
+import itertools
 from deletionAlg import deletionAlg
 from AEGIS_select import selectPhase, selectVolt
 import pandas as pd
-import networkx as nx
-import matplotlib.pyplot as plt
-from matplotlib import colors as mcolors
-import numpy as np
-from bokeh.models import Range1d, Circle, ColumnDataSource, MultiLine, \
-    NodesAndLinkedEdges, LabelSet, HoverTool, Div, Button, TapTool, LinearColorMapper, ColorBar
-from bokeh.plotting import figure, curdoc, show
-from bokeh.plotting import from_networkx, gridplot
-from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, AutocompleteInput, Slider
+import networkx
+from bokeh.models import Range1d, Circle, MultiLine, \
+    NodesAndLinkedEdges, HoverTool, Div, Button, LinearColorMapper, ColorBar, TapTool
+from bokeh.plotting import figure, curdoc
+from bokeh.plotting import from_networkx
+from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, AutocompleteInput, Slider, RadioButtonGroup
 from importData_HH import importData_HH
 from bokeh.layouts import row, column
-from bokeh.events import Tap
 from ImportCSV import *
 from nodeNormalize import *
-from bokeh.transform import transform
 import time
+from plotData import *
 
-# External Imports
-nodeData, branchData= importData_HH('R2_1247_3_t11_mod_branch_data.txt', 'R2_1247_3_t11_mod_node_data.txt')
-longNames, insts = csvRead('R2_1247_3_t11_ResidentialVoltages.csv')
+# Import Constant Data
+feederName = "Feeder_2_Solar_80"
+nodeData, branchData, loadData = importData_HH(feederName + '_mod_branch_data.txt', feederName + '_mod_node_data.txt', feederName + '_mod_load_data.txt') #puts node information into corresponding class type in dictionary
+
+#gets name of node which load feeds off of
+for i in loadData.keys():
+    loadData[i].node = data_to_node(nodeData, i)
+   
+# Import Data over Time, instsa are the estimated voltage at each instance
+longNames, insts = csvRead(feederName + '_ResidentialVoltages.csv')
+longNodeNames, nodeInsts = csvRead(feederName + '_node_voltage_a.csv')
+longNN2, bNodeInsts = csvRead(feederName + '_node_voltage_b.csv')
+longNN3, cNodeInsts = csvRead(feederName + '_node_voltage_c.csv')
+longTripNames, tripInsts = csvRead(feederName + '_triplex_node.csv')
+
+# Removes blank/uneeded data from names
 longNames = longNames[1:]
-times = []
+longNodeNames = longNodeNames[1:]
+longTripNames = longTripNames[1:]
+
+times = [] # All times where data is recorded
+
+# Puts times in order and sorts data points by object
 for i in range(len(insts)):
-    times.append(insts[i][0])
-    insts[i] = insts[i][1:]
+    times.append(insts[i][0]) #Creates list of times in order from csv
+    insts[i] = insts[i][1:] # Insts is a list of lists, where each inner list is all data recorded for objects at point in time
+
+#Creates list of the measured voltages
+nodeMeasVol = []
+nodeMeasVolB = []
+nodeMeasVolC = []
+for i in range(len(nodeInsts)):
+    nodeMeasVolList = []
+    nodeMeasVolListB = []
+    nodeMeasVolListC = []
+    nodeInsts[i] = nodeInsts[i][1:]
+    bNodeInsts[i] = bNodeInsts[i][1:]
+    cNodeInsts[i] = cNodeInsts[i][1:]
+
+    #Finds magnitude of complex voltages
+    for j in range(len(nodeInsts[i])):
+        nodeInsts[i][j] = complex(nodeInsts[i][j])
+        bNodeInsts[i][j] = complex(bNodeInsts[i][j])
+        cNodeInsts[i][j] = complex(cNodeInsts[i][j])
+        nodeMeasVolList.append(complex(nodeInsts[i][j]))
+        nodeMeasVolListB.append(complex(bNodeInsts[i][j]))
+        nodeMeasVolListC.append(complex(cNodeInsts[i][j]))
+        nodeInsts[i][j] = ((nodeInsts[i][j].real**2 + nodeInsts[i][j].imag**2)**0.5)
+        bNodeInsts[i][j] = ((bNodeInsts[i][j].real**2 + bNodeInsts[i][j].imag**2)**0.5)
+        cNodeInsts[i][j] = ((cNodeInsts[i][j].real**2 + cNodeInsts[i][j].imag**2)**0.5)
+    nodeMeasVol.append(nodeMeasVolList)
+    nodeMeasVolB.append(nodeMeasVolListB)
+    nodeMeasVolC.append(nodeMeasVolListC)
+
+tripMeasVol = []
+for i in range(len(tripInsts)):
+    tripMeasVolList = []
+    tripInsts[i] = tripInsts[i][1:]
+    for j in range(len(tripInsts[i])):
+        tripInsts[i][j] = complex(tripInsts[i][j].replace('i', 'j'))
+        tripMeasVolList.append(tripInsts[i][j])
+        tripInsts[i][j] = ((tripInsts[i][j].real**2 + tripInsts[i][j].imag**2)**0.5)
+    tripMeasVol.append(tripMeasVolList)
+
+shName = [] #Initializes for short names
+dataDict = {} #empty dictionary for data
+aDataDict = {}
+bDataDict = {}
+cDataDict = {}
+unNormData= {}
+aUnNorm = {}
+bUnNorm = {}
+cUnNorm = {}
+for i in longNames:
+    if data_to_node(nodeData, i):
+        shName.append(data_to_node(nodeData, i)) #Makes list of names that match with txt files
+for i in longNodeNames:
+    if data_to_node(nodeData, i):
+        shName.append(data_to_node(nodeData, i))
+for i in longTripNames:
+    if data_to_node(nodeData, i):
+        shName.append(data_to_node(nodeData, i))
+
+for name in set(shName):
+    dataDict[name] = [] #Initializes short values as dictionaries with an empty list value
+    aDataDict[name] = []
+    bDataDict[name] = []
+    cDataDict[name] = []
+    unNormData[name] = []
+    aUnNorm[name] = []
+    bUnNorm[name] = []
+    cUnNorm[name] = []
+
 
 for i in range(len(longNames)):
-    newDict = {}
-shName = []
-dataDict = {}
-for i in longNames:
-    shName.append(data_to_node(nodeData, i))
-for name in set(shName):
-    dataDict[name] = []
-for i in range(len(longNames)):
-    dataDict[shName[i]].append([data[i] for data in insts])
+    dataDict[shName[i]].append([data[i] for data in insts]) #Puts in all data for one node as value in dictionary
+    unNormData[shName[i]].append([data[i] for data in insts]) #Same thing, to be kept unnormalized
+
+#Same process as above for high voltage nodes, separated by phase
+for i in range(len([l for l in longNodeNames if data_to_node(nodeData, l)])):
+    dataDict[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
+    aDataDict[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
+    bDataDict[shName[len(longNames)+i]].append([data[i] for data in bNodeInsts])
+    cDataDict[shName[len(longNames)+i]].append([data[i] for data in cNodeInsts])
+    unNormData[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
+    aUnNorm[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
+    bUnNorm[shName[len(longNames)+i]].append([data[i] for data in bNodeInsts])
+    cUnNorm[shName[len(longNames)+i]].append([data[i] for data in bNodeInsts])
+
+#Same as above for triplex data
+for i in range(len([l for l in longTripNames if data_to_node(nodeData, l)])):
+    dataDict[shName[len(longNames) + len(longNodeNames) +i]].append([data[i] for data in tripInsts])
+    unNormData[shName[len(longNames) + len(longNodeNames) +i]].append([data[i] for data in tripInsts])
+
+#Normalizes all data in dictionaries
 for key in dataDict.keys():
     for i in range(len(dataDict[key])):
         for j in range(len(dataDict[key][i])):
-            dataDict[key][i][j] = nodeNormalize(nodeData, key, dataDict[key][i][j])  
+            dataDict[key][i][j] = nodeNormalize(nodeData, key, dataDict[key][i][j]) 
+
+#Same as above for different phases 
+for key in aDataDict.keys():
+    for i in range(len(aDataDict[key])):
+        for j in range(len(aDataDict[key][i])):
+            aDataDict[key][i][j] = nodeNormalize(nodeData, key, aDataDict[key][i][j]) 
+            bDataDict[key][i][j] = nodeNormalize(nodeData, key, bDataDict[key][i][j]) 
+            cDataDict[key][i][j] = nodeNormalize(nodeData, key, cDataDict[key][i][j]) 
 
 # Main Function
 def main():
     print("AEGIS")
 
     # Create data frame for connecting nodes
-    connection = pd.DataFrame({'from': [fBranch.fromNode for fBranch in branchData.values()],
-                               'to': [tBranch.toNode for tBranch in branchData.values()]})
+    nodeFro = [fBranch.fromNode for fBranch in branchData.values()]
+    nodeTo = [tBranch.toNode for tBranch in branchData.values()]
+    for load in loadData.keys():
+        nodeFro.append(loadData[load].node)
+        nodeTo.append(load)
+    connection = pd.DataFrame({'from': nodeFro,
+                               'to': nodeTo})
 
     node_highlight_color = 'white'
     edge_highlight_color = 'black'
@@ -67,26 +171,21 @@ def main():
     # Create dict for node characteristics
     node_color_dict = {}
 
-    color_mapper = LinearColorMapper(palette = "Turbo256", low = 0.95, high = 1.05, nan_color= 'lightgrey')
+    #Color map for displaying changes over time
+    color_mapper = LinearColorMapper(palette = "Turbo256", low = 0.95, high = 1.05, nan_color= 'lightgrey') 
 
-    #Initializes node color
-    for n in nodeData.values():
-        if n.index == 1:
-            node_color_dict[n.label] = 'yellow'
-        elif n.baseV == 7200:
-            node_color_dict[n.label] = 'red'
-        else:
-            node_color_dict[n.label] = 'skyblue'
-
+    #Creates dictionary for branch color
     bColor= {}
     for branch in branchData.values():
-        bColor[branch.fromNode, branch.toNode] = 'black' #Creates dictionary for edge color
+        bColor[branch.fromNode, branch.toNode] = 'black'
+    for load in loadData.values():
+        bColor[load.node, load.label] = 'black'
 
     #Used to control color of node outline
-    outline_dict = dict(zip([n for n in nodeData.keys()], ['black']* len(nodeData)))
+    outline_dict = dict(zip(itertools.chain([n for n in nodeData.keys()], [l for l in loadData.keys()]), ['black']* (len(nodeData) + len(loadData))))
 
     #Creates a graph object contining nodes and edges from all connections
-    g = nx.from_pandas_edgelist(connection, 'from', 'to')
+    g = networkx.from_pandas_edgelist(connection, 'from', 'to')
 
     #Creating From node dictionary
     fromNodeDict = {}
@@ -95,29 +194,33 @@ def main():
             fromNodeDict[node.label] = node.fromBranch.fromNode
         else:
             fromNodeDict[node.label] = 'N/A'
+    for load in loadData.values():
+        fromNodeDict[load.label] = load.node
 
+    #Creates dictionary for so normalized values can be displayed with hover function
     valueDictionary = {}
     for node in nodeData.values():
-        if node.label in dataDict.keys():
+        if node.label in dataDict.keys() and 'A' in node.phases:
             valueDictionary[node.label] = dataDict[node.label][0][0]
         else:
             valueDictionary[node.label] = 'N/A'
+    for load in loadData.values():
+        valueDictionary[load.label] = valueDictionary[load.node]
 
     #Sets attributes which will be displayed by hover function
-    networkx.set_node_attributes(g, dict(zip([n.label for n in nodeData.values()], [n.baseV for n in nodeData.values()])), 'node_base_v')
-    networkx.set_node_attributes(g, dict(zip([n.label for n in nodeData.values()], [n.phases for n in nodeData.values()])), 'node_phase')
+    networkx.set_node_attributes(g, dict(zip(itertools.chain([n.label for n in nodeData.values()], [l for l in loadData.keys()]), itertools.chain([n.baseV for n in nodeData.values()], [nodeData[l.node].baseV for l in loadData.values()]))), 'node_base_v')
+    networkx.set_node_attributes(g, dict(zip(itertools.chain([n.label for n in nodeData.values()], [l for l in loadData.keys()]), itertools.chain([n.phases for n in nodeData.values()], [nodeData[l.node].phases for l in loadData.values()]))), 'node_phase')
     networkx.set_node_attributes(g, node_color_dict, 'node_color')
     networkx.set_node_attributes(g, fromNodeDict, 'fromNode')
     networkx.set_node_attributes(g, outline_dict, 'border_color')
     networkx.set_node_attributes(g, valueDictionary, 'sim_vals')
+    networkx.set_node_attributes(g, dict(zip(itertools.chain([n.label for n in nodeData.values()], [l for l in loadData.keys()]), itertools.chain([15]*len(nodeData), [10]*len(loadData)))), 'size')
     node_outline= 'border_color'
-    color_attribute = 'node_color'
     lineType = {}
     lineLabel = {}
     fromNode = {}
     linePhases = {}
     toNode = {}
-    lengthDict = {}
 
     #This program plots branches by inputting connected nodes, so this makes a dictionary with attributes
     for b in branchData.values():
@@ -126,15 +229,14 @@ def main():
         lineLabel[a, c] = b.label
         fromNode[a, c] = a
         toNode[a, c] = c
-        lengthDict[a, c] = b.length
         linePhases[a, c] = b.phases
+
     #Associated Branch Attributes with visualization location
     networkx.set_edge_attributes(g, lineType, 'type')
     networkx.set_edge_attributes(g, linePhases, 'phase')
     networkx.set_edge_attributes(g, lineLabel, 'label')
     networkx.set_edge_attributes(g, fromNode, 'from')
     networkx.set_edge_attributes(g, toNode, 'to')
-    networkx.set_edge_attributes(g, lengthDict, 'length')
     networkx.set_edge_attributes(g, bColor, 'branch_color')
     edge_cmap= 'branch_color'
 
@@ -142,47 +244,101 @@ def main():
     plot = figure(
                   tools="pan,wheel_zoom,save,reset", active_scroll='wheel_zoom',
                   x_range=Range1d(-30.1, 30.1), y_range=Range1d(-30.1, 30.1))
+    
 
     #Imports graph from networkx
-    network_graph = from_networkx(g, nx.kamada_kawai_layout, scale=30, center=(0, 0))
+    network_graph = from_networkx(g, networkx.kamada_kawai_layout, scale=30, center=(0, 0))
 
-    # Add Labels
-    '''x, y = zip(*network_graph.layout_provider.graph_layout.values())
-    node_labels = list(g.nodes())
-    source = ColumnDataSource({'x': x, 'y': y, 'name': [node_labels[i] for i in range(len(x))]})
-    #labels = LabelSet(x='x', y='y', text='name', source=source, background_fill_color='white', text_font_size='10px',
-    #                  background_fill_alpha=.7)'''
-    #print(network_graph.node_renderer.data_source.data)
-    x, y = zip(*network_graph.layout_provider.graph_layout.values())
+    def clickCall1(attr, old, new):
+        #Checks that node is being selected, not deselected
+        if(network_graph.node_renderer.data_source.selected.indices != []):
 
-    network_graph.node_renderer.glyph = Circle(size=15, fill_color={'field' : 'sim_vals', 'transform' : color_mapper}, line_color= node_outline)
-    #print(network_graph.layout_provider.graph_layout.values())
+            #Finds selected nodes and plots its data over time
+            nameClicked = list(itertools.chain(list(nodeData.keys()), list(loadData.keys())))[new[0]]
+            if nameClicked in loadData.keys():
+                nodeClicked = loadData[nameClicked].node #House voltages are the same as the node that they feed from
+            else:
+                nodeClicked = nameClicked
 
+            if(nodeClicked in unNormData.keys()):
+                if nodeClicked in nodeData.keys() and len(nodeData[nodeClicked].phases) > 2: #Checks if the object clicked has multiple phases
+                    # Sets plot attributes
+                    p = figure(title = ('Voltage Over Time for ' + nameClicked))
+                    p.title.text_font_size = '20pt'
+                    p.yaxis.axis_label = 'Voltage (V)'
+                    p.xaxis.axis_label = 'Instance'
+                    inds = [x + 1 for x in range(len(times))]
+                    p.line(inds, aUnNorm[nodeClicked][0], line_color='red', legend_label= 'A Phase')
+                    p.line(inds, bUnNorm[nodeClicked][0], line_color='blue', legend_label = 'B Phase')
+                    p.line(inds, cUnNorm[nodeClicked][0], line_color='yellow', legend_label = 'C Phase')
+                elif nodeClicked in nodeData.keys() and len(nodeData[nodeClicked].phases) == 2 and 'N' in nodeData[nodeClicked].phases:
+                    p = figure(title = ('Voltage Over Time for ' + nameClicked))
+                    p.title.text_font_size = '20pt'
+                    p.yaxis.axis_label = 'Voltage (V)'
+                    p.xaxis.axis_label = 'Instance'   
+                    inds = [x + 1 for x in range(len(times))]
+                    if nodeData[nodeClicked].phases == 'AN':
+                        p.line(inds, aUnNorm[nodeClicked][0])
+                    if nodeData[nodeClicked].phases == 'BN':
+                        p.line(inds, bUnNorm[nodeClicked][0])
+                    if nodeData[nodeClicked].phases == 'CN':
+                        p.line(inds, cUnNorm[nodeClicked][0])
+
+                else:
+                    source = ColumnDataSource(data=dict(voltage = unNormData[nodeClicked][0], time = times, inds = [x + 1 for x in range(len(times))])) # dates = time, nodes = energy value at that date for the node
+                    p = figure(title = ('Voltage Over Time for ' + nameClicked))
+                    p.title.text_font_size='20pt'
+                    p.line('inds', 'voltage', source=source)
+                    p.yaxis.axis_label = 'Voltage (V)'
+                    p.xaxis.axis_label = 'Instance'
+                    p.add_tools(HoverTool(tooltips=[('Voltage', '@voltage'), ('Time', '@time')]))
+    
+
+                #Finds if a plot is present and either replaces, deletes, or puts up plot accordingly
+                if (len(r.children[1].children) == 7):
+                    r.children[1].children.append(p)
+                else:
+                    r.children[1].children[7] = p
+            else:
+                del r.children[1].children[7] #deletes plot of data over time if no node is clicked
+        else:
+            del r.children[1].children[7] #deletes plot of data over time if no node is clicked
+        
+    def clickCall2(attr, old, new):
+        if(network_graph.edge_renderer.data_source.selected.indices != []):
+            branchClicked = list(branchData.keys())[new[0]]
+            bColor[branchData[branchClicked].fromNode, branchData[branchClicked].toNode] = 'orange'
+
+    
+    #Sets Nodes to be Colored Via color map and simulated values
+    network_graph.node_renderer.glyph = Circle(size='size', fill_color={'field' : 'sim_vals', 'transform' : color_mapper}, line_color= node_outline)
     # Set edge opacity and width
-    network_graph.edge_renderer.glyph = MultiLine(line_alpha=0.5, line_width=1, line_color= edge_cmap)
+    network_graph.edge_renderer.glyph = MultiLine(line_alpha=1, line_width=0.5, line_color= edge_cmap)
 
+    #Adds tap capability to nodes and branches
+    tap1 = TapTool(renderers=[network_graph.node_renderer])
+    network_graph.node_renderer.nonselection_glyph = Circle(fill_alpha=0.4, fill_color={'field' : 'sim_vals', 'transform' : color_mapper})
+    tap2 = TapTool(renderers=[network_graph.edge_renderer])
+    network_graph.edge_renderer.nonselection_glyph = MultiLine(line_alpha=1)
 
     # Hover function for node portion of inital data
     hover_nodes = HoverTool(
                     tooltips= [("Node", "@index"), ("Base Voltage(V)", "@node_base_v"), ("Phase", "@node_phase"), ("From Node", "@fromNode"), ("Simulated Voltage", "@sim_vals")],
                     renderers= [network_graph.node_renderer]
                     )
-    
-    #tapEvent = TapTool()
-
 
     # Hover function for branch portion of initial data
     hover_edges = HoverTool(
-				    tooltips=[('Branch', '@label'), ('Type','@type'), ("Phase", "@phase"), ("From", "@from"), ("To", "@to"), ("Length", "@length")],
+				    tooltips=[('Branch', '@label'), ('Type','@type'), ("Phase", "@phase"), ("From", "@from"), ("To", "@to")],#, ("Length", "@length")],
 				    renderers=[network_graph.edge_renderer],
                     line_policy= 'interp'
 				    )
 
-    def call(event):
-        print(event.data)
+    plot.add_tools(hover_edges, hover_nodes, tap1, tap2)
 
-    plot.add_tools(hover_edges, hover_nodes)#, tapEvent)#, TapTool(renderers=[network_graph.node_renderer, network_graph.edge_renderer]))
-    #plot.on_event(Tap, call)
+    #callback when things are clicked
+    network_graph.node_renderer.data_source.selected.on_change('indices',clickCall1)
+    network_graph.edge_renderer.data_source.selected.on_change('indices',clickCall2)
 
     # Set edge highlight colors
     network_graph.edge_renderer.selection_glyph = MultiLine(line_color=node_highlight_color, line_width=2)
@@ -192,12 +348,8 @@ def main():
 
     # Add network graph to the plot
     plot.renderers.append(network_graph)
-#plot.renderers.append(labels)
 
-    '''color = LinearColorMapper(palette = 'Viridis256',
-                          low = -100,
-                          high = 40)'''
-
+    #Makes Rectangle Demonstrating Color Range
     color_bar = ColorBar(color_mapper = color_mapper,
                      label_standoff = 14,
                      location = (0,0),
@@ -231,21 +383,14 @@ def main():
             restore(altNodes, altBranches)
 
     def nodeUpdate(index):
-        #print(network_graph.node_renderer.data_source.data)
-        for i in dataDict.keys():
-            valueDictionary[i] = dataDict[i][0][index]
-        network_graph.node_renderer.data_source.data['sim_vals'] = list(valueDictionary.values())
-        #print(nodeVoltRange)
-        network_graph.node_renderer.glyph.fill_color = {'field' : 'sim_vals', 'transform' : color_mapper}
-        #update()
-                
-    def aPhaseCall():
-        nodeUpdate(1)
+
+        # Changes simulated values to different time instance
         
-    def bPhaseCall():
-        restore([n.label for n in nodeData.values()], [])
-    def cPhaseCall():
-        print('C')
+        phaseFunc(['A', 'B', 'C'][phaseButtons.active], [aDataDict, bDataDict, cDataDict][phaseButtons.active])
+        network_graph.node_renderer.data_source.data['sim_vals'] = list(valueDictionary.values())
+        #Alters Colors According to New Values
+        network_graph.node_renderer.glyph.fill_color = {'field' : 'sim_vals', 'transform' : color_mapper}
+                
 
     def checkVCallback(attr, old, new):   
         if len(old) > len(new): #true if value has been deselected
@@ -256,7 +401,6 @@ def main():
                     #marks these values grey via voltage
                     for i in greyN:
                         nodeData[i].value[1] = False
-                        #node_value_dict[i][1] = False
                     gOut(greyN, [])
 
         else:
@@ -267,7 +411,7 @@ def main():
                     #Marks components to nto be grey via voltage
                     for i in colorN:
                         nodeData[i].value[1] = True
-                        #node_value_dict[i][1] = True
+
                     restore(colorN, []) 
 
     #Phase Checkbox Widget
@@ -414,13 +558,9 @@ def main():
         update()
 
     def restore(nodes, edges):
-        #print('check 1')
         #Function which changes certain attibutes if parts no longer need to be gray
         for i in nodes:
-            #print(i)
-            #print(node_color_dict[i])
             if(node_color_dict[i] != 'skyblue' and node_color_dict[i] != 'red' and node_color_dict[i] != 'yellow'): #Checks if node has been deactivated by another source
-                #print(i)
                 #Checks for node color based on color
                 if nodeData[i].index == 1:
                     node_color_dict[i] = 'yellow'
@@ -441,13 +581,9 @@ def main():
         network_graph.node_renderer.data_source.data['node_color']=(list(node_color_dict.values()))
         network_graph.node_renderer.data_source.data['border_color']=(list(outline_dict.values()))
         network_graph.edge_renderer.data_source.data['branch_color']=(list(bColor.values()))
-    
-        
-        #print(network_graph.node_renderer.data_source.data)
 
         plot.update(renderers = [network_graph])
-
-    #print(network_graph.node_renderer.data_source)     
+   
     text_input = AutocompleteInput(title="Enter Node to be Put In or Out of Service:", completions= [n for n in nodeData.keys()], value="") #Autocomplete text box
     text_input.on_change("value", callback) #activates when text is entered
     
@@ -455,29 +591,67 @@ def main():
     branch_text_input.on_change("value", bCallback) #activates when text is entered
 
     def movieCall():
+        #indexes through all times
         for i in range(len(times)):
-            start = time.time()
-            #print(start)
             slider.update(value= i + 1)
-            end = time.time()
-            #print(end)
-            '''while ((end - start) < 0.2):
-                end = time.time()'''
             
-    button = Button(label='Movie Thing')
+    #Adds button to movie functionality
+    button = Button(label='Movie')
     button.on_click(movieCall)
 
     def slideCall(attr, old, new):
-        slider.update(title = times[new -1])
+        #Callnack when slider value is changes
+        slider.update(title = times[new -1]) #Updates slider title to display time
         nodeUpdate(new -1)
 
+    def phaseFunc(phase, phData):
+        #Changes which phase that is displayed
+        vals = list(valueDictionary.keys())
+        for l in vals:
+            if l in nodeData.keys():
+                if(phase in nodeData[l].phases): #Checks if phase is in node
+                    #updates value to phase
+                    if aDataDict[l] != []: #checks if node
+                        valueDictionary[l] = phData[l][0][slider.value -1]
+                    else:
+                        valueDictionary[l] = dataDict[l][0][slider.value -1]
+                else:
+                    valueDictionary[l] = 'N/A' #changes to non-number value
 
+            if l in loadData.keys():
+                #Same as above for loads
+                if(phase  not in loadData[l].phases):
+                        valueDictionary[l] = 'N/A'
+                else:
+                    valueDictionary[l] = dataDict[loadData[l].node][0][slider.value -1]        
+
+    def nodePhaseCall(attr, old, new):
+        #checks phase and sends information to change to correct graph
+        if(new==0):
+            phaseFunc('A', aDataDict)
+        
+        if(new==1):
+            phaseFunc('B', bDataDict)
+
+        if(new==2):
+            phaseFunc('C', cDataDict)
+
+        network_graph.node_renderer.data_source.data['sim_vals'] = list(valueDictionary.values()) #Updates simulated values
+
+        #Alters Colors According to New Values
+        network_graph.node_renderer.glyph.fill_color = {'field' : 'sim_vals', 'transform' : color_mapper}
+
+    #Button widgets for phase
+    phaseButtons = RadioButtonGroup(labels = ['A Phase', 'B Phase', 'C Phase'], active=0)
+    phaseButtons.on_change('active', nodePhaseCall)
+
+    #Slider widget for time
     slider = Slider(start= 1, end = len(times), value = 1, title = times[0])
     slider.on_change('value', slideCall)
 
     div = Div(text = '') #Creates initial empty widget for text block of deactivated items
 
-    r = row(children= [plot, column(children= [row(children=[checkbox_group, checkbox_v]), text_input, branch_text_input, div, row(children = [button]), slider])]) #formatting
+    r = row(children= [plot, column(children= [row(children=[checkbox_group, checkbox_v]), text_input, branch_text_input, div, row(children = [button]), phaseButtons, slider])]) #formatting
     curdoc().add_root(r) #adds plot to server
 
 main()
