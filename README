@@ -1,0 +1,7 @@
+In order to run this code, these libraries must be installed:
+itertools
+pandas
+networkx
+bokeh(.models, .plotting, .layouts)
+
+The AEGIS2Orig is the main function of this code.
