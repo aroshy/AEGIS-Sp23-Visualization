@@ -16,16 +16,14 @@ from bokeh.models import Range1d, Circle, MultiLine, \
     NodesAndLinkedEdges, HoverTool, Div, Button, LinearColorMapper, ColorBar, TapTool
 from bokeh.plotting import figure, curdoc
 from bokeh.plotting import from_networkx
-from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, AutocompleteInput, Slider, RadioButtonGroup
+from bokeh.models import NodesAndLinkedEdges, CheckboxGroup, CustomJS, AutocompleteInput, Slider, RadioButtonGroup, ColumnDataSource
 from importData_HH import importData_HH
 from bokeh.layouts import row, column
 from ImportCSV import *
 from nodeNormalize import *
-import time
-from plotData import *
 
 # Import Constant Data
-feederName = "Feeder_2_Solar_80"
+feederName = "Feeder_1_Solar_5"
 nodeData, branchData, loadData = importData_HH(feederName + '_mod_branch_data.txt', feederName + '_mod_node_data.txt', feederName + '_mod_load_data.txt') #puts node information into corresponding class type in dictionary
 
 #gets name of node which load feeds off of
@@ -267,6 +265,8 @@ def main():
                     p.title.text_font_size = '20pt'
                     p.yaxis.axis_label = 'Voltage (V)'
                     p.xaxis.axis_label = 'Instance'
+                    p.yaxis.axis_label_text_font_size = '15pt'
+                    p.xaxis.axis_label_text_font_size = '15pt'
                     inds = [x + 1 for x in range(len(times))]
                     p.line(inds, aUnNorm[nodeClicked][0], line_color='red', legend_label= 'A Phase')
                     p.line(inds, bUnNorm[nodeClicked][0], line_color='blue', legend_label = 'B Phase')
@@ -275,7 +275,9 @@ def main():
                     p = figure(title = ('Voltage Over Time for ' + nameClicked))
                     p.title.text_font_size = '20pt'
                     p.yaxis.axis_label = 'Voltage (V)'
-                    p.xaxis.axis_label = 'Instance'   
+                    p.xaxis.axis_label = 'Time'  
+                    p.yaxis.axis_label_text_font_size = '15pt'
+                    p.xaxis.axis_label_text_font_size = '15pt'
                     inds = [x + 1 for x in range(len(times))]
                     if nodeData[nodeClicked].phases == 'AN':
                         p.line(inds, aUnNorm[nodeClicked][0])
@@ -290,7 +292,9 @@ def main():
                     p.title.text_font_size='20pt'
                     p.line('inds', 'voltage', source=source)
                     p.yaxis.axis_label = 'Voltage (V)'
-                    p.xaxis.axis_label = 'Instance'
+                    p.xaxis.axis_label = 'Time'
+                    p.yaxis.axis_label_text_font_size = '15pt'
+                    p.xaxis.axis_label_text_font_size = '15pt'
                     p.add_tools(HoverTool(tooltips=[('Voltage', '@voltage'), ('Time', '@time')]))
     
 
