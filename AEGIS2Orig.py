@@ -23,7 +23,7 @@ from ImportCSV import *
 from nodeNormalize import *
 
 # Import Constant Data
-feederName = "Feeder_1_Solar_5"
+feederName = "Feeder_2_Solar_25"
 nodeData, branchData, loadData = importData_HH(feederName + '_mod_branch_data.txt', feederName + '_mod_node_data.txt', feederName + '_mod_load_data.txt') #puts node information into corresponding class type in dictionary
 
 #gets name of node which load feeds off of
@@ -95,46 +95,39 @@ unNormData= {}
 aUnNorm = {}
 bUnNorm = {}
 cUnNorm = {}
-for i in longNames:
-    if data_to_node(nodeData, i):
-        shName.append(data_to_node(nodeData, i)) #Makes list of names that match with txt files
-for i in longNodeNames:
-    if data_to_node(nodeData, i):
-        shName.append(data_to_node(nodeData, i))
-for i in longTripNames:
-    if data_to_node(nodeData, i):
-        shName.append(data_to_node(nodeData, i))
-
-for name in set(shName):
-    dataDict[name] = [] #Initializes short values as dictionaries with an empty list value
-    aDataDict[name] = []
-    bDataDict[name] = []
-    cDataDict[name] = []
-    unNormData[name] = []
-    aUnNorm[name] = []
-    bUnNorm[name] = []
-    cUnNorm[name] = []
-
-
 for i in range(len(longNames)):
-    dataDict[shName[i]].append([data[i] for data in insts]) #Puts in all data for one node as value in dictionary
-    unNormData[shName[i]].append([data[i] for data in insts]) #Same thing, to be kept unnormalized
-
-#Same process as above for high voltage nodes, separated by phase
-for i in range(len([l for l in longNodeNames if data_to_node(nodeData, l)])):
-    dataDict[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
-    aDataDict[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
-    bDataDict[shName[len(longNames)+i]].append([data[i] for data in bNodeInsts])
-    cDataDict[shName[len(longNames)+i]].append([data[i] for data in cNodeInsts])
-    unNormData[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
-    aUnNorm[shName[len(longNames)+i]].append([data[i] for data in nodeInsts])
-    bUnNorm[shName[len(longNames)+i]].append([data[i] for data in bNodeInsts])
-    cUnNorm[shName[len(longNames)+i]].append([data[i] for data in bNodeInsts])
-
-#Same as above for triplex data
-for i in range(len([l for l in longTripNames if data_to_node(nodeData, l)])):
-    dataDict[shName[len(longNames) + len(longNodeNames) +i]].append([data[i] for data in tripInsts])
-    unNormData[shName[len(longNames) + len(longNodeNames) +i]].append([data[i] for data in tripInsts])
+    if data_to_node(nodeData, longNames[i]):
+        sName = data_to_node(nodeData, longNames[i])
+        dataDict[sName] = [] #Initializes short values as dictionaries with an empty list value
+        unNormData[sName] = []
+        dataDict[sName].append([data[i] for data in insts])
+        unNormData[sName].append([data[i] for data in insts])
+for i in range(len(longNodeNames)):
+    if data_to_node(nodeData, longNodeNames[i]):
+        sName = data_to_node(nodeData, longNodeNames[i])
+        dataDict[sName] = [] #Initializes short values as dictionaries with an empty list value
+        unNormData[sName] = []
+        aDataDict[sName] = [] #Creates dictionary for a phase
+        aUnNorm[sName] = []
+        bDataDict[sName] = []
+        bUnNorm[sName] = []
+        cDataDict[sName] = []
+        cUnNorm[sName] = []
+        dataDict[sName].append([data[i] for data in nodeInsts]) #Adds data as a value for a dictionary
+        unNormData[sName].append([data[i] for data in nodeInsts]) #Another dictionary that will not be normalized
+        aDataDict[sName].append([data[i] for data in nodeInsts]) #Does the same for all different phases
+        aUnNorm[sName].append([data[i] for data in nodeInsts])
+        bDataDict[sName].append([data[i] for data in bNodeInsts])
+        bUnNorm[sName].append([data[i] for data in bNodeInsts])
+        cDataDict[sName].append([data[i] for data in cNodeInsts])
+        cUnNorm[sName].append([data[i] for data in cNodeInsts])
+for i in range(len(longTripNames)): #Does the same as above for triplex nodes
+    if data_to_node(nodeData, longTripNames[i]):
+        sName = data_to_node(nodeData, longTripNames[i])
+        dataDict[sName] = []
+        unNormData[sName] = []
+        dataDict[sName].append([data[i] for data in tripInsts])
+        unNormData[sName].append([data[i] for data in tripInsts])
 
 #Normalizes all data in dictionaries
 for key in dataDict.keys():
@@ -260,17 +253,19 @@ def main():
 
             if(nodeClicked in unNormData.keys()):
                 if nodeClicked in nodeData.keys() and len(nodeData[nodeClicked].phases) > 2: #Checks if the object clicked has multiple phases
+                    source = ColumnDataSource(data=dict(aVoltage = aUnNorm[nodeClicked][0], bVoltage = bUnNorm[nodeClicked][0], cVoltage = cUnNorm[nodeClicked][0], time = times, inds = [x + 1 for x in range(len(times))])) # dates = time, nodes = energy value at that date for the node
                     # Sets plot attributes
                     p = figure(title = ('Voltage Over Time for ' + nameClicked))
                     p.title.text_font_size = '20pt'
                     p.yaxis.axis_label = 'Voltage (V)'
-                    p.xaxis.axis_label = 'Instance'
+                    p.xaxis.axis_label = 'Time'
                     p.yaxis.axis_label_text_font_size = '15pt'
                     p.xaxis.axis_label_text_font_size = '15pt'
-                    inds = [x + 1 for x in range(len(times))]
-                    p.line(inds, aUnNorm[nodeClicked][0], line_color='red', legend_label= 'A Phase')
-                    p.line(inds, bUnNorm[nodeClicked][0], line_color='blue', legend_label = 'B Phase')
-                    p.line(inds, cUnNorm[nodeClicked][0], line_color='yellow', legend_label = 'C Phase')
+                    p.line('inds', 'aVoltage', source=source, line_color= 'red', legend_label= 'A Phase')
+                    p.line('inds', 'bVoltage', source=source, line_color= 'blue', legend_label= 'B Phase')
+                    p.line('inds', 'cVoltage', source=source, line_color= 'yellow', legend_label= 'C Phase')
+                    p.add_tools(HoverTool(tooltips=[('A Phase Voltage', '@aVoltage'), ('B Phase Voltage', '@bVoltage'), ('C Phase Voltage', '@cVoltage'), ('Time', '@time')]))
+
                 elif nodeClicked in nodeData.keys() and len(nodeData[nodeClicked].phases) == 2 and 'N' in nodeData[nodeClicked].phases:
                     p = figure(title = ('Voltage Over Time for ' + nameClicked))
                     p.title.text_font_size = '20pt'
@@ -278,13 +273,14 @@ def main():
                     p.xaxis.axis_label = 'Time'  
                     p.yaxis.axis_label_text_font_size = '15pt'
                     p.xaxis.axis_label_text_font_size = '15pt'
-                    inds = [x + 1 for x in range(len(times))]
                     if nodeData[nodeClicked].phases == 'AN':
-                        p.line(inds, aUnNorm[nodeClicked][0])
+                        source = ColumnDataSource(data=dict(voltage = aUnNorm[nodeClicked][0], time = times, inds = [x + 1 for x in range(len(times))])) # dates = time, nodes = energy value at that date for the node
                     if nodeData[nodeClicked].phases == 'BN':
-                        p.line(inds, bUnNorm[nodeClicked][0])
+                        source = ColumnDataSource(data=dict(voltage = bUnNorm[nodeClicked][0], time = times, inds = [x + 1 for x in range(len(times))])) # dates = time, nodes = energy value at that date for the node
                     if nodeData[nodeClicked].phases == 'CN':
-                        p.line(inds, cUnNorm[nodeClicked][0])
+                        source = ColumnDataSource(data=dict(voltage = cUnNorm[nodeClicked][0], time = times, inds = [x + 1 for x in range(len(times))])) # dates = time, nodes = energy value at that date for the node
+                    p.line('inds', 'voltage', source=source)
+                    p.add_tools(HoverTool(tooltips=[('Voltage', '@voltage'), ('Time', '@time')]))
 
                 else:
                     source = ColumnDataSource(data=dict(voltage = unNormData[nodeClicked][0], time = times, inds = [x + 1 for x in range(len(times))])) # dates = time, nodes = energy value at that date for the node
@@ -295,6 +291,8 @@ def main():
                     p.xaxis.axis_label = 'Time'
                     p.yaxis.axis_label_text_font_size = '15pt'
                     p.xaxis.axis_label_text_font_size = '15pt'
+                    #p.x_range = Range1d(1, len(unNormData[nodeClicked][0]))
+                    #p.y_range = Range1d(230, 245)
                     p.add_tools(HoverTool(tooltips=[('Voltage', '@voltage'), ('Time', '@time')]))
     
 
